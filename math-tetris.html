@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Tetris</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;700&display=swap');
+        
+        body {
+            font-family: 'Kanit', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        
+        .game-block {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+        }
+        
+        .number-block {
+            background: linear-gradient(135deg, #4361ee, #3a0ca3);
+            border: 2px solid #7209b7;
+        }
+        
+        .operator-block {
+            background: linear-gradient(135deg, #f72585, #b5179e);
+            border: 2px solid #560bad;
+        }
+        
+        .bomb-block {
+            background: linear-gradient(135deg, #d00000, #9d0208);
+            border: 2px solid #370617;
+            animation: pulse 1s infinite alternate;
+        }
+        
+        .square-block {
+            background: linear-gradient(135deg, #ffbe0b, #fb8500);
+            border: 2px solid #e85d04;
+            animation: glow 1.5s infinite alternate;
+        }
+        
+        .empty-cell {
+            background-color: rgba(30, 30, 46, 0.5);
+            border: 1px solid rgba(72, 149, 239, 0.2);
+        }
+        
+        @keyframes pulse {
+            from { transform: scale(0.95); }
+            to { transform: scale(1.05); }
+        }
+        
+        @keyframes glow {
+            from { box-shadow: 0 0 5px #ffbe0b; }
+            to { box-shadow: 0 0 15px #fb8500; }
+        }
+        
+        .game-grid {
+            border: 2px solid #4895ef;
+            background-color: rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 20px rgba(72, 149, 239, 0.5);
+        }
+        
+        .next-piece-container {
+            border: 2px solid #4895ef;
+            background-color: rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 10px rgba(72, 149, 239, 0.3);
+            width: 176px; /* 4 * 40px + 3 * 4px gap + 8px padding */
+            padding: 8px;
+        }
+        
+        .btn {
+            transition: all 0.3s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        .btn:active {
+            transform: translateY(1px);
+        }
+        
+        .modal {
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 2px solid #4895ef;
+            box-shadow: 0 0 30px rgba(72, 149, 239, 0.7);
+        }
+        
+        .shop-btn {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .shop-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0));
+            transform: translateX(-100%);
+            transition: transform 0.5s;
+        }
+        
+        .shop-btn:hover::before {
+            transform: translateX(100%);
+        }
+        
+        .disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .score-change {
+            position: absolute;
+            font-weight: bold;
+            animation: floatUp 1s forwards;
+            z-index: 100;
+        }
+        
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-50px); opacity: 0; }
+        }
+        
+        @keyframes flash {
+            0% { background-color: white; color: black; }
+            100% { background-color: transparent; }
+        }
+        
+        @keyframes skillFlash {
+            0% { opacity: 0.8; }
+            100% { opacity: 0; }
+        }
+        
+        .equation-modal, .shop-modal {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .equation-block {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            margin: 0 2px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .skill-section {
+            border-bottom: 1px solid rgba(72, 149, 239, 0.3);
+        }
+        
+        .skill-section:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center">
+    <div class="container mx-auto px-4 py-8 flex flex-col items-center">
+        <h1 class="text-4xl font-bold mb-4 text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">Math Tetris</h1>
+        
+        <div class="flex flex-col md:flex-row gap-8 items-center justify-center">
+            <!-- Game board -->
+            <div class="game-container">
+                <div class="flex justify-between items-center mb-2">
+                    <div class="text-xl font-bold">คะแนน: <span id="score" class="text-yellow-300">0</span></div>
+                    <button id="shop-btn" class="shop-btn bg-gradient-to-r from-purple-600 to-blue-500 text-white px-4 py-2 rounded-lg disabled font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                        ร้านค้า
+                    </button>
+                </div>
+                <div id="game-grid" class="game-grid grid grid-cols-7 gap-1 p-1 rounded-lg relative"></div>
+            </div>
+            
+            <!-- Game controls and next piece -->
+            <div class="flex flex-col gap-4">
+                <div class="next-piece-container p-3 rounded-lg">
+                    <div class="text-center mb-2 font-bold">บล็อกถัดไป</div>
+                    <div id="next-piece" class="grid gap-1 justify-center"></div>
+                </div>
+                
+                <div class="controls grid grid-cols-3 gap-2">
+                    <button id="left-btn" class="btn bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg col-span-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+                    <button id="rotate-btn" class="btn bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg col-span-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                    <button id="right-btn" class="btn bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg col-span-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                    <button id="down-btn" class="btn bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg col-span-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <button id="help-btn" class="btn bg-yellow-600 hover:bg-yellow-700 text-white p-3 rounded-lg">
+                    วิธีเล่น
+                </button>
+                
+                <button id="start-btn" class="btn bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg">
+                    เริ่มเกมใหม่
+                </button>
+            </div>
+        </div>
+        
+        <!-- Help Modal -->
+        <div id="help-modal" class="modal fixed inset-0 flex items-center justify-center z-50 hidden">
+            <div class="modal-overlay absolute inset-0 bg-black opacity-75"></div>
+            <div class="modal-content relative bg-gray-900 p-6 rounded-lg max-w-2xl max-h-[80vh] overflow-y-auto">
+                <h2 class="text-2xl font-bold mb-4 text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">วิธีเล่น Math Tetris</h2>
+                
+                <div class="space-y-4 text-gray-200">
+                    <p><strong>เป้าหมาย:</strong> สร้างสมการคณิตศาสตร์ที่ถูกต้องโดยการจัดเรียงบล็อกตัวเลขและเครื่องหมายในแถวให้สมบูรณ์</p>
+                    
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">กฎพื้นฐาน:</h3>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li>บล็อกจะตกลงมาเรื่อยๆ คุณสามารถเลื่อนซ้าย-ขวา หมุน หรือเร่งให้บล็อกตกเร็วขึ้นได้โดยใช้ปุ่มควบคุมหรือคีย์บอร์ด (ซ้าย, ขวา, ลง, ขึ้น)</li>
+                            <li>บล็อกมี 2 ประเภทหลัก: บล็อกตัวเลข (0-9) และบล็อกเครื่องหมาย (+, -, x)</li>
+                            <li>เมื่อแถวเต็ม (7 ช่อง) และเรียงเป็นรูปแบบที่ถูกต้อง "ตัวเลข เครื่องหมาย ตัวเลข เครื่องหมาย ตัวเลข เครื่องหมาย ตัวเลข" ระบบจะคำนวณคะแนนตามผลลัพธ์ของสมการ</li>
+                            <li>ตัวอย่าง: แถว "3 + 5 x 2" จะได้ 13 คะแนน (คำนวณจาก 3 + (5 x 2) = 3 + 10 = 13)</li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">บทลงโทษ:</h3>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li>หากแถวเต็มแต่ไม่เป็นรูปแบบที่ถูกต้อง (เช่น มีเครื่องหมายในตำแหน่งตัวเลข หรือตัวเลขในตำแหน่งเครื่องหมาย) บล็อกที่ผิดตำแหน่งจะถูกทำลาย และบล็อกด้านบนในคอลัมน์นั้นจะเลื่อนลงมา</li>
+                            <li>คุณจะเสีย 1 คะแนนต่อบล็อกที่วางผิดตำแหน่ง</li>
+                            <li>ตัวอย่าง: แถว "3 + 5 x x 4 4" จะกลายเป็น "3 + 5 x (ว่าง) (ว่าง) 4" และเสีย 2 คะแนน</li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">บล็อกพิเศษ:</h3>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li><strong class="text-red-400">บล็อกระเบิด (💣):</strong> เมื่อวางลง จะทำลายบล็อกทั้งหมดในพื้นที่ 3x3 รอบตำแหน่งนั้นทันที (โอกาสเกิด 8%)</li>
+                            <li><strong class="text-yellow-400">บล็อกยกกำลังสอง (²):</strong> ทำลายบล็อกที่อยู่ด้านล่าง และหากเป็นบล็อกตัวเลข จะได้คะแนนเท่ากับตัวเลขนั้นยกกำลังสอง (เช่น 5² = 25 คะแนน) (โอกาสเกิด 2%)</li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">ร้านค้าและสกิล:</h3>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li>กดปุ่ม "ร้านค้า" เพื่อเปิดหน้าต่างร้านค้า ซึ่งจะหยุดเกมชั่วคราว</li>
+                            <li>ใช้คะแนนที่สะสมเพื่อซื้อสกิลพิเศษ 2 ประเภท:</li>
+                            <li><strong class="text-blue-400">ดันบล็อกลง (100 คะแนน):</strong> ทำให้บล็อกทั้งหมดในทุกคอลัมน์ตกลงมาชิดด้านล่าง โดยไม่มีช่องว่าง หลังจากนั้นระบบจะตรวจสอบแถวที่เต็ม</li>
+                            <li><strong class="text-purple-400">จัดระเบียบ (200 คะแนน):</strong> ทำลายบล็อกทุกอันที่อยู่ในตำแหน่งไม่ถูกต้องทั่วทั้งกระดาน (คอลัมน์ 1, 3, 5, 7 ต้องเป็นตัวเลข คอลัมน์ 2, 4, 6 ต้องเป็นเครื่องหมาย) และบล็อกด้านบนในคอลัมน์ที่ถูกทำลายจะเลื่อนลงมาชิดกัน</li>
+                            <li>ปุ่มร้านค้าจะใช้งานได้เมื่อมีคะแนนอย่างน้อย 100 คะแนน (ค่าสกิลที่ถูกที่สุด)</li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">จบเกม:</h3>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li>เกมจะจบเมื่อบล็อกสูงถึงขอบบนสุดของกระดาน ทำให้ไม่สามารถวางบล็อกใหม่ได้</li>
+                            <li>หรือเมื่อคะแนนรวมติดลบหลังจากคำนวณทั้งหมด (เช่น หลังจากการลงโทษหรือใช้สกิล)</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <button id="close-help" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg w-full">เข้าใจแล้ว</button>
+            </div>
+        </div>
+        
+        <!-- Game Over Modal -->
+        <div id="game-over-modal" class="modal fixed inset-0 flex items-center justify-center z-50 hidden">
+            <div class="modal-overlay absolute inset-0 bg-black opacity-75"></div>
+            <div class="modal-content relative bg-gray-900 p-6 rounded-lg max-w-md">
+                <h2 class="text-2xl font-bold mb-4 text-center text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-yellow-500">เกมจบแล้ว!</h2>
+                <p class="text-center mb-4">คะแนนของคุณ: <span id="final-score" class="text-yellow-300 text-2xl font-bold">0</span></p>
+                <p id="game-over-reason" class="text-center mb-6 text-gray-300"></p>
+                <button id="restart-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg w-full">เล่นอีกครั้ง</button>
+            </div>
+        </div>
+        
+        <!-- Equation Modal -->
+        <div id="equation-modal" class="modal fixed inset-0 flex items-center justify-center z-50 hidden">
+            <div class="modal-overlay absolute inset-0 bg-black opacity-75"></div>
+            <div class="modal-content equation-modal relative bg-gray-900 p-6 rounded-lg max-w-md">
+                <h2 class="text-2xl font-bold mb-4 text-center text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500">สมการถูกต้อง!</h2>
+                <div id="equation-display" class="flex justify-center items-center mb-4 text-2xl"></div>
+                <p class="text-center mb-6">
+                    คุณได้รับ <span id="equation-score" class="text-yellow-300 text-2xl font-bold">0</span> คะแนน
+                </p>
+                <button id="continue-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg w-full">ตกลง</button>
+            </div>
+        </div>
+        
+        <!-- Shop Modal -->
+        <div id="shop-modal" class="modal fixed inset-0 flex items-center justify-center z-50 hidden">
+            <div class="modal-overlay absolute inset-0 bg-black opacity-75"></div>
+            <div class="modal-content shop-modal relative bg-gray-900 p-6 rounded-lg max-w-md">
+                <h2 class="text-2xl font-bold mb-4 text-center text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500">ร้านค้าสกิล</h2>
+                <div class="space-y-4">
+                    <div class="skill-section pb-4">
+                        <h3 class="text-lg font-bold text-blue-400">ดันบล็อกลง</h3>
+                        <p class="text-gray-300">ทำให้บล็อกทั้งหมดในทุกคอลัมน์ตกลงมาชิดด้านล่าง โดยไม่มีช่องว่าง หลังจากนั้นระบบจะตรวจสอบแถวที่เต็ม</p>
+                        <p class="text-yellow-300 font-bold">ราคา: 100 คะแนน</p>
+                        <button id="buy-push-down" class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg w-full disabled:opacity-50 disabled:cursor-not-allowed">ซื้อ</button>
+                    </div>
+                    <div class="skill-section pb-4">
+                        <h3 class="text-lg font-bold text-purple-400">จัดระเบียบ</h3>
+                        <p class="text-gray-300">ทำลายบล็อกทุกอันที่อยู่ในตำแหน่งไม่ถูกต้องทั่วทั้งกระดาน (คอลัมน์ 1, 3, 5, 7 ต้องเป็นตัวเลข คอลัมน์ 2, 4, 6 ต้องเป็นเครื่องหมาย) และบล็อกด้านบนจะเลื่อนลงมาชิดกัน</p>
+                        <p class="text-yellow-300 font-bold">ราคา: 200 คะแนน</p>
+                        <button id="buy-organize" class="btn bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg w-full disabled:opacity-50 disabled:cursor-not-allowed">ซื้อ</button>
+                    </div>
+                </div>
+                <button id="close-shop" class="mt-6 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg w-full">ปิดร้านค้า</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game constants
+        const ROWS = 15;
+        const COLS = 7;
+        const BLOCK_SIZE = 40;
+        const NUMBERS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        const OPERATORS = ['+', '-', 'x'];
+        const SPECIAL_BLOCKS = {
+            BOMB: '💣',
+            SQUARE: '²'
+        };
+        
+        // Game variables
+        let grid = [];
+        let currentPiece = null;
+        let nextPiece = null;
+        let score = 0;
+        let gameInterval = null;
+        let gameSpeed = 1500;
+        let gameOver = false;
+        let gamePaused = false;
+        let shopAvailable = false;
+        
+        // DOM elements
+        const gameGridElement = document.getElementById('game-grid');
+        const nextPieceElement = document.getElementById('next-piece');
+        const scoreElement = document.getElementById('score');
+        const shopButton = document.getElementById('shop-btn');
+        const helpModal = document.getElementById('help-modal');
+        const gameOverModal = document.getElementById('game-over-modal');
+        const shopModal = document.getElementById('shop-modal');
+        const finalScoreElement = document.getElementById('final-score');
+        const gameOverReasonElement = document.getElementById('game-over-reason');
+        const equationModal = document.getElementById('equation-modal');
+        const equationDisplay = document.getElementById('equation-display');
+        const equationScoreElement = document.getElementById('equation-score');
+        const continueButton = document.getElementById('continue-btn');
+        const buyPushDownButton = document.getElementById('buy-push-down');
+        const buyOrganizeButton = document.getElementById('buy-organize');
+        
+        // Initialize the game
+        function initGame() {
+            grid = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+            gameGridElement.style.width = `${COLS * (BLOCK_SIZE + 4)}px`;
+            gameGridElement.style.height = `${ROWS * (BLOCK_SIZE + 4)}px`;
+            gameGridElement.innerHTML = '';
+            
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('game-block', 'empty-cell');
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    gameGridElement.appendChild(cell);
+                }
+            }
+            
+            score = 0;
+            scoreElement.textContent = score;
+            gameOver = false;
+            gamePaused = false;
+            shopAvailable = false;
+            shopButton.classList.add('disabled');
+            
+            nextPiece = generateRandomPiece();
+            spawnNewPiece();
+            
+            if (gameInterval) clearInterval(gameInterval);
+            gameInterval = setInterval(moveDown, gameSpeed);
+            
+            if (!localStorage.getItem('mathTetrisHelpShown')) {
+                showHelpModal();
+                localStorage.setItem('mathTetrisHelpShown', 'true');
+            }
+        }
+        
+        // Generate a random piece
+        function generateRandomPiece() {
+            const random = Math.random();
+            let type, value;
+            
+            if (random < 0.02) {
+                type = 'special';
+                value = SPECIAL_BLOCKS.SQUARE;
+                return {
+                    shape: [[value]],
+                    type: type,
+                    value: value,
+                    row: 0,
+                    col: Math.floor(COLS / 2)
+                };
+            } else if (random < 0.10) {
+                type = 'special';
+                value = SPECIAL_BLOCKS.BOMB;
+                return {
+                    shape: [[value]],
+                    type: type,
+                    value: value,
+                    row: 0,
+                    col: Math.floor(COLS / 2)
+                };
+            } else {
+                const shapes = [
+                    { shape: [[1, 1, 1, 1]], rotations: 2 }, // 1x4 vertical
+                    { shape: [[0, 0, 1], [1, 1, 1]], rotations: 4 }, // 2x3 L-shape
+                    { shape: [[1, 0, 0], [1, 1, 1]], rotations: 4 }, // 2x3 L-shape reflected
+                    { shape: [[1, 1], [1, 1]], rotations: 1 }, // 2x2 square
+                    { shape: [[1, 1, 1], [0, 1, 0]], rotations: 4 }, // 2x3 T-shape
+                    { shape: [[0, 1, 1], [1, 1, 0]], rotations: 2 }, // 2x3 S-shape
+                    { shape: [[1, 1, 0], [0, 1, 1]], rotations: 2 } // 2x3 Z-shape
+                ];
+                
+                const selectedShape = shapes[Math.floor(Math.random() * shapes.length)];
+                const shape = selectedShape.shape;
+                
+                const filledShape = [];
+                for (let row = 0; row < shape.length; row++) {
+                    const newRow = [];
+                    for (let col = 0; col < shape[row].length; col++) {
+                        if (shape[row][col] === 1) {
+                            const isEven = (row + col) % 2 === 0;
+                            if (isEven) {
+                                newRow.push({
+                                    type: 'number',
+                                    value: NUMBERS[Math.floor(Math.random() * NUMBERS.length)]
+                                });
+                            } else {
+                                newRow.push({
+                                    type: 'operator',
+                                    value: OPERATORS[Math.floor(Math.random() * OPERATORS.length)]
+                                });
+                            }
+                        } else {
+                            newRow.push(null);
+                        }
+                    }
+                    filledShape.push(newRow);
+                }
+                
+                return {
+                    shape: filledShape,
+                    row: 0,
+                    col: Math.floor((COLS - filledShape[0].length) / 2),
+                    rotations: selectedShape.rotations
+                };
+            }
+        }
+        
+        // Spawn a new piece
+        function spawnNewPiece() {
+            currentPiece = nextPiece;
+            nextPiece = generateRandomPiece();
+            
+            if (!isValidPosition(currentPiece)) {
+                endGame("บล็อกสูงถึงขอบบนสุด!");
+                return;
+            }
+            
+            updateNextPieceDisplay();
+            drawPiece();
+        }
+        
+        // Update the next piece display
+        function updateNextPieceDisplay() {
+            nextPieceElement.innerHTML = '';
+            
+            if (nextPiece.type === 'special') {
+                nextPieceElement.style.gridTemplateColumns = `repeat(4, 40px)`;
+                nextPieceElement.style.gridTemplateRows = `repeat(2, 40px)`;
+                
+                for (let row = 0; row < 2; row++) {
+                    for (let col = 0; col < 4; col++) {
+                        const cell = document.createElement('div');
+                        cell.style.width = '40px';
+                        cell.style.height = '40px';
+                        
+                        if (row === 0 && col === 1) {
+                            cell.classList.add('game-block');
+                            if (nextPiece.value === SPECIAL_BLOCKS.BOMB) {
+                                cell.classList.add('bomb-block');
+                            } else if (nextPiece.value === SPECIAL_BLOCKS.SQUARE) {
+                                cell.classList.add('square-block');
+                            }
+                            cell.textContent = nextPiece.value;
+                        } else {
+                            cell.classList.add('empty-cell');
+                            cell.style.background = 'transparent';
+                            cell.style.border = 'none';
+                        }
+                        nextPieceElement.appendChild(cell);
+                    }
+                }
+            } else {
+                const shape = nextPiece.shape;
+                const shapeRows = shape.length;
+                const shapeCols = shape[0].length;
+                
+                nextPieceElement.style.gridTemplateColumns = `repeat(4, 40px)`;
+                nextPieceElement.style.gridTemplateRows = `repeat(2, 40px)`;
+                
+                let colOffset = 0;
+                if (shapeCols === 2) {
+                    colOffset = 1;
+                } else if (shapeCols === 3) {
+                    colOffset = 0;
+                } else if (shapeCols === 4) {
+                    colOffset = 0;
+                }
+                
+                let rowOffset = shapeRows === 1 ? 0 : 0;
+                
+                for (let row = 0; row < 2; row++) {
+                    for (let col = 0; col < 4; col++) {
+                        const cell = document.createElement('div');
+                        cell.style.width = '40px';
+                        cell.style.height = '40px';
+                        
+                        const shapeRow = row - rowOffset;
+                        const shapeCol = col - colOffset;
+                        if (shapeRow >= 0 && shapeRow < shapeRows && shapeCol >= 0 && shapeCol < shapeCols && shape[shapeRow][shapeCol]) {
+                            cell.classList.add('game-block');
+                            if (shape[shapeRow][shapeCol].type === 'number') {
+                                cell.classList.add('number-block');
+                            } else {
+                                cell.classList.add('operator-block');
+                            }
+                            cell.textContent = shape[shapeRow][shapeCol].value;
+                        } else {
+                            cell.classList.add('empty-cell');
+                            cell.style.background = 'transparent';
+                            cell.style.border = 'none';
+                        }
+                        nextPieceElement.appendChild(cell);
+                    }
+                }
+            }
+        }
+        
+        // Draw the current piece on the grid
+        function drawPiece() {
+            clearPiece();
+            if (!currentPiece) return;
+            
+            if (currentPiece.type === 'special') {
+                const row = currentPiece.row;
+                const col = currentPiece.col;
+                if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    if (cell) {
+                        cell.classList.remove('empty-cell');
+                        if (currentPiece.value === SPECIAL_BLOCKS.BOMB) {
+                            cell.classList.add('bomb-block');
+                        } else if (currentPiece.value === SPECIAL_BLOCKS.SQUARE) {
+                            cell.classList.add('square-block');
+                        }
+                        cell.textContent = currentPiece.value;
+                    }
+                }
+            } else {
+                const shape = currentPiece.shape;
+                for (let row = 0; row < shape.length; row++) {
+                    for (let col = 0; col < shape[row].length; col++) {
+                        if (shape[row][col]) {
+                            const gridRow = currentPiece.row + row;
+                            const gridCol = currentPiece.col + col;
+                            if (gridRow >= 0 && gridRow < ROWS && gridCol >= 0 && gridCol < COLS) {
+                                const cell = document.querySelector(`[data-row="${gridRow}"][data-col="${gridCol}"]`);
+                                if (cell) {
+                                    cell.classList.remove('empty-cell');
+                                    if (shape[row][col].type === 'number') {
+                                        cell.classList.add('number-block');
+                                    } else {
+                                        cell.classList.add('operator-block');
+                                    }
+                                    cell.textContent = shape[row][col].value;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Clear the current piece from the grid
+        function clearPiece() {
+            if (!currentPiece) return;
+            
+            if (currentPiece.type === 'special') {
+                const row = currentPiece.row;
+                const col = currentPiece.col;
+                if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
+                    if (!grid[row][col]) {
+                        const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                        if (cell) {
+                            cell.classList.remove('bomb-block', 'square-block');
+                            cell.classList.add('empty-cell');
+                            cell.textContent = '';
+                        }
+                    }
+                }
+            } else {
+                const shape = currentPiece.shape;
+                for (let row = 0; row < shape.length; row++) {
+                    for (let col = 0; col < shape[row].length; col++) {
+                        if (shape[row][col]) {
+                            const gridRow = currentPiece.row + row;
+                            const gridCol = currentPiece.col + col;
+                            if (gridRow >= 0 && gridRow < ROWS && gridCol >= 0 && col < COLS) {
+                                if (!grid[gridRow][gridCol]) {
+                                    const cell = document.querySelector(`[data-row="${gridRow}"][data-col="${gridCol}"]`);
+                                    if (cell) {
+                                        cell.classList.remove('number-block', 'operator-block');
+                                        cell.classList.add('empty-cell');
+                                        cell.textContent = '';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check if the position is valid for the current piece
+        function isValidPosition(piece, offsetRow = 0, offsetCol = 0) {
+            if (!piece) return false;
+            
+            if (piece.type === 'special') {
+                const row = piece.row + offsetRow;
+                const col = piece.col + offsetCol;
+                if (col < 0 || col >= COLS || row >= ROWS) return false;
+                if (row >= 0 && grid[row][col]) return false;
+                return true;
+            } else {
+                const shape = piece.shape;
+                for (let row = 0; row < shape.length; row++) {
+                    for (let col = 0; col < shape[row].length; col++) {
+                        if (shape[row][col]) {
+                            const gridRow = piece.row + row + offsetRow;
+                            const gridCol = piece.col + col + offsetCol;
+                            if (gridCol < 0 || gridCol >= COLS || gridRow >= ROWS) return false;
+                            if (gridRow >= 0 && grid[gridRow][gridCol]) return false;
+                        }
+                    }
+                }
+                return true;
+            }
+        }
+        
+        // Move the current piece down
+        function moveDown() {
+            if (gameOver || gamePaused) return;
+            
+            if (isValidPosition(currentPiece, 1, 0)) {
+                clearPiece();
+                currentPiece.row++;
+                drawPiece();
+            } else {
+                lockPiece();
+                if (currentPiece.type === 'special') {
+                    handleSpecialBlock();
+                }
+                checkRows();
+                spawnNewPiece();
+            }
+        }
+        
+        // Move the current piece left
+        function moveLeft() {
+            if (gameOver || gamePaused) return;
+            if (isValidPosition(currentPiece, 0, -1)) {
+                clearPiece();
+                currentPiece.col--;
+                drawPiece();
+            }
+        }
+        
+        // Move the current piece right
+        function moveRight() {
+            if (gameOver || gamePaused) return;
+            if (isValidPosition(currentPiece, 0, 1)) {
+                clearPiece();
+                currentPiece.col++;
+                drawPiece();
+            }
+        }
+        
+        // Rotate the current piece
+        function rotatePiece() {
+            if (gameOver || gamePaused || !currentPiece || currentPiece.type === 'special') return;
+            clearPiece();
+            const rotated = rotateMatrix(currentPiece.shape);
+            const originalShape = currentPiece.shape;
+            currentPiece.shape = rotated;
+            if (!isValidPosition(currentPiece)) {
+                for (let i = 1; i <= 2; i++) {
+                    currentPiece.col -= i;
+                    if (isValidPosition(currentPiece)) {
+                        drawPiece();
+                        return;
+                    }
+                    currentPiece.col += i;
+                }
+                for (let i = 1; i <= 2; i++) {
+                    currentPiece.col += i;
+                    if (isValidPosition(currentPiece)) {
+                        drawPiece();
+                        return;
+                    }
+                    currentPiece.col -= i;
+                }
+                currentPiece.shape = originalShape;
+            }
+            drawPiece();
+        }
+        
+        // Rotate a matrix 90 degrees clockwise
+        function rotateMatrix(matrix) {
+            const rows = matrix.length;
+            const cols = matrix[0].length;
+            const rotated = Array(cols).fill().map(() => Array(rows).fill(null));
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    rotated[col][rows - 1 - row] = matrix[row][col];
+                }
+            }
+            return rotated;
+        }
+        
+        // Lock the current piece in place
+        function lockPiece() {
+            if (!currentPiece) return;
+            
+            if (currentPiece.type === 'special') {
+                const row = currentPiece.row;
+                const col = currentPiece.col;
+                if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
+                    grid[row][col] = {
+                        type: 'special',
+                        value: currentPiece.value
+                    };
+                }
+            } else {
+                const shape = currentPiece.shape;
+                for (let row = 0; row < shape.length; row++) {
+                    for (let col = 0; col < shape[row].length; col++) {
+                        if (shape[row][col]) {
+                            const gridRow = currentPiece.row + row;
+                            const gridCol = currentPiece.col + col;
+                            if (gridRow >= 0 && gridRow < ROWS && gridCol >= 0 && gridCol < COLS) {
+                                grid[gridRow][gridCol] = shape[row][col];
+                            }
+                        }
+                    }
+                }
+            }
+            updateGridDisplay();
+        }
+        
+        // Handle special block effects
+        function handleSpecialBlock() {
+            if (!currentPiece) return;
+            
+            const row = currentPiece.row;
+            const col = currentPiece.col;
+            
+            if (currentPiece.value === SPECIAL_BLOCKS.BOMB) {
+                explodeBomb(row, col);
+            } else if (currentPiece.value === SPECIAL_BLOCKS.SQUARE) {
+                applySquareEffect(row, col);
+            }
+            
+            if (score < 0) {
+                endGame("คะแนนรวมติดลบ!");
+            }
+        }
+        
+        // Explode bomb at the given position
+        function explodeBomb(row, col) {
+            for (let r = Math.max(0, row - 1); r <= Math.min(ROWS - 1, row + 1); r++) {
+                for (let c = Math.max(0, col - 1); c <= Math.min(COLS - 1, col + 1); c++) {
+                    grid[r][c] = null;
+                    const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+                    if (cell) {
+                        cell.classList.remove('number-block', 'operator-block', 'bomb-block', 'square-block');
+                        cell.classList.add('empty-cell');
+                        cell.textContent = '';
+                    }
+                }
+            }
+            currentPiece = null;
+            updateGridDisplay();
+            setTimeout(() => {
+                const explosion = document.createElement('div');
+                explosion.classList.add('absolute', 'z-10');
+                explosion.style.width = `${BLOCK_SIZE * 3}px`;
+                explosion.style.height = `${BLOCK_SIZE * 3}px`;
+                explosion.style.top = `${row * (BLOCK_SIZE + 4) - BLOCK_SIZE}px`;
+                explosion.style.left = `${col * (BLOCK_SIZE + 4) - BLOCK_SIZE}px`;
+                explosion.style.background = 'radial-gradient(circle, rgba(255,165,0,0.8) 0%, rgba(255,0,0,0.8) 50%, rgba(0,0,0,0) 100%)';
+                explosion.style.borderRadius = '50%';
+                explosion.style.animation = 'explosion 0.5s forwards';
+                gameGridElement.appendChild(explosion);
+                setTimeout(() => {
+                    if (gameGridElement.contains(explosion)) {
+                        gameGridElement.removeChild(explosion);
+                    }
+                }, 500);
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes explosion {
+                        0% { transform: scale(0.5); opacity: 1; }
+                        100% { transform: scale(2); opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }, 10);
+        }
+        
+        // Apply square effect at the given position
+        function applySquareEffect(row, col) {
+            if (row + 1 < ROWS && grid[row + 1][col]) {
+                const targetBlock = grid[row + 1][col];
+                if (targetBlock.type === 'number') {
+                    const number = parseInt(targetBlock.value);
+                    const squaredValue = number * number;
+                    updateScore(squaredValue);
+                    showFloatingScore(row + 1, col, squaredValue);
+                }
+                grid[row + 1][col] = null;
+                const cell = document.querySelector(`[data-row="${row + 1}"][data-col="${col}"]`);
+                if (cell) {
+                    cell.classList.remove('number-block', 'operator-block');
+                    cell.classList.add('empty-cell');
+                    cell.textContent = '';
+                }
+            }
+            grid[row][col] = null;
+            const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            if (cell) {
+                cell.classList.remove('square-block');
+                cell.classList.add('empty-cell');
+                cell.textContent = '';
+            }
+            currentPiece = null;
+            updateGridDisplay();
+        }
+        
+        // Show floating score animation
+        function showFloatingScore(row, col, points) {
+            const floatingScore = document.createElement('div');
+            floatingScore.classList.add('score-change');
+            if (points > 0) {
+                floatingScore.textContent = `+${points}`;
+                floatingScore.classList.add('text-yellow-300');
+            } else {
+                floatingScore.textContent = points;
+                floatingScore.classList.add('text-red-500');
+            }
+            const cellRect = document.querySelector(`[data-row="${row}"][data-col="${col}"]`).getBoundingClientRect();
+            const gridRect = gameGridElement.getBoundingClientRect();
+            floatingScore.style.left = `${cellRect.left - gridRect.left + cellRect.width / 2 - 20}px`;
+            floatingScore.style.top = `${cellRect.top - gridRect.top}px`;
+            gameGridElement.appendChild(floatingScore);
+            setTimeout(() => {
+                if (gameGridElement.contains(floatingScore)) {
+                    gameGridElement.removeChild(floatingScore);
+                }
+            }, 1000);
+        }
+        
+        // Shift blocks down in specified columns
+        function shiftColumnsDown(row, columns) {
+            for (const col of columns) {
+                for (let r = row - 1; r >= 0; r--) {
+                    grid[r + 1][col] = grid[r][col];
+                    grid[r][col] = null;
+                }
+            }
+            updateGridDisplay();
+        }
+        
+        // Move blocks down to fill gaps (Push Down skill)
+        function moveBlocksDown() {
+            for (let col = 0; col < COLS; col++) {
+                const blocks = [];
+                for (let row = 0; row < ROWS; row++) {
+                    if (grid[row][col] !== null) {
+                        blocks.push(grid[row][col]);
+                        grid[row][col] = null;
+                    }
+                }
+                let targetRow = ROWS - 1;
+                for (let i = blocks.length - 1; i >= 0; i--) {
+                    grid[targetRow][col] = blocks[i];
+                    targetRow--;
+                }
+            }
+            updateGridDisplay();
+        }
+        
+        // Organize grid by removing incorrect blocks
+        function organizeGrid() {
+            const invalidPositions = [];
+            
+            // Identify incorrect blocks
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    const cell = grid[row][col];
+                    if (cell && cell.type !== 'special') {
+                        const expectedType = col % 2 === 0 ? 'number' : 'operator';
+                        if (cell.type !== expectedType) {
+                            invalidPositions.push({ row, col });
+                            const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                            if (cellElement) {
+                                cellElement.classList.remove('number-block', 'operator-block');
+                                cellElement.classList.add('empty-cell');
+                                cellElement.textContent = '';
+                                cellElement.style.animation = 'flash 0.3s';
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Clear incorrect blocks and reset animations
+            setTimeout(() => {
+                const columnsToShift = new Set();
+                for (const { row, col } of invalidPositions) {
+                    grid[row][col] = null;
+                    columnsToShift.add(col);
+                    const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    if (cellElement) {
+                        cellElement.style.animation = '';
+                    }
+                }
+                
+                // Shift blocks down in affected columns
+                for (const col of columnsToShift) {
+                    for (let row = ROWS - 1; row >= 0; row--) {
+                        if (grid[row][col] === null) {
+                            for (let r = row - 1; r >= 0; r--) {
+                                grid[r + 1][col] = grid[r][col];
+                                grid[r][col] = null;
+                            }
+                        }
+                    }
+                }
+                
+                updateGridDisplay();
+                checkRows();
+            }, 300);
+        }
+        
+        // Purchase and apply a skill
+        function purchaseSkill(skillType) {
+            if (gameOver || !shopModal.classList.contains('hidden')) {
+                let cost = 0;
+                if (skillType === 'push-down' && score >= 100) {
+                    cost = 100;
+                    updateScore(-cost);
+                    moveBlocksDown();
+                    checkRows();
+                    const flash = document.createElement('div');
+                    flash.classList.add('absolute', 'inset-0', 'bg-white', 'z-30');
+                    flash.style.animation = 'skillFlash 0.5s forwards';
+                    gameGridElement.appendChild(flash);
+                    setTimeout(() => {
+                        if (gameGridElement.contains(flash)) {
+                            gameGridElement.removeChild(flash);
+                        }
+                    }, 500);
+                } else if (skillType === 'organize' && score >= 200) {
+                    cost = 200;
+                    updateScore(-cost);
+                    organizeGrid();
+                }
+                updateShopButtons();
+            }
+        }
+        
+        // Update shop button states
+        function updateShopButtons() {
+            buyPushDownButton.disabled = score < 100;
+            buyOrganizeButton.disabled = score < 200;
+            if (score < 100) {
+                shopButton.classList.add('disabled');
+                shopAvailable = false;
+            } else {
+                shopButton.classList.remove('disabled');
+                shopAvailable = true;
+            }
+        }
+        
+        // Show shop modal
+        function showShopModal() {
+            if (gameOver) return;
+            pauseGame();
+            shopModal.classList.remove('hidden');
+            updateShopButtons();
+        }
+        
+        // Close shop modal
+        function closeShopModal() {
+            shopModal.classList.add('hidden');
+            resumeGame();
+        }
+        
+        // Check for completed rows
+        function checkRows() {
+            let rowsCleared = false;
+            
+            for (let row = ROWS - 1; row >= 0; row--) {
+                if (grid[row].every(cell => cell !== null)) {
+                    const isValidPattern = isValidMathPattern(row);
+                    if (isValidPattern.valid) {
+                        const mathScore = calculateMathScore(isValidPattern.expression);
+                        pauseGame();
+                        showEquationModal(isValidPattern.expression, mathScore);
+                        updateScore(mathScore);
+                        clearRow(row);
+                        rowsCleared = true;
+                        break;
+                    } else {
+                        const invalidPositions = isValidPattern.invalidPositions;
+                        let penalty = invalidPositions.length * 1;
+                        updateScore(-penalty);
+                        showFloatingScore(row, 3, -penalty);
+                        for (const pos of invalidPositions) {
+                            const cell = document.querySelector(`[data-row="${row}"][data-col="${pos}"]`);
+                            if (cell) {
+                                cell.classList.remove('number-block', 'operator-block');
+                                cell.classList.add('empty-cell');
+                                cell.textContent = '';
+                                cell.style.animation = 'flash 0.3s';
+                            }
+                        }
+                        setTimeout(() => {
+                            for (const pos of invalidPositions) {
+                                grid[row][pos] = null;
+                                const cell = document.querySelector(`[data-row="${row}"][data-col="${pos}"]`);
+                                if (cell) {
+                                    cell.style.animation = '';
+                                }
+                            }
+                            shiftColumnsDown(row, invalidPositions);
+                        }, 300);
+                    }
+                }
+            }
+            
+            if (!rowsCleared) {
+                updateGridDisplay();
+            }
+            
+            if (score < 0) {
+                endGame("คะแนนรวมติดลบ!");
+            }
+        }
+        
+        // Check if a row follows the valid math pattern
+        function isValidMathPattern(row) {
+            const pattern = [];
+            const invalidPositions = [];
+            for (let col = 0; col < COLS; col++) {
+                const cell = grid[row][col];
+                if (!cell) {
+                    invalidPositions.push(col);
+                    continue;
+                }
+                const expectedType = col % 2 === 0 ? 'number' : 'operator';
+                if (cell.type !== expectedType) {
+                    invalidPositions.push(col);
+                }
+                pattern.push(cell.value);
+            }
+            if (invalidPositions.length > 0) {
+                return { valid: false, invalidPositions };
+            }
+            return { valid: true, expression: pattern.join(' ') };
+        }
+        
+        // Calculate score based on a math expression
+        function calculateMathScore(expression) {
+            try {
+                const tokens = expression.split(' ').filter(token => token.trim() !== '');
+                const values = [];
+                const operators = [];
+                for (let i = 0; i < tokens.length; i++) {
+                    if (i % 2 === 0) {
+                        values.push(parseInt(tokens[i]));
+                    } else {
+                        operators.push(tokens[i]);
+                    }
+                }
+                let i = 0;
+                while (i < operators.length) {
+                    if (operators[i] === 'x') {
+                        values[i] = values[i] * values[i + 1];
+                        values.splice(i + 1, 1);
+                        operators.splice(i, 1);
+                    } else {
+                        i++;
+                    }
+                }
+                let result = values[0];
+                for (let i = 0; i < operators.length; i++) {
+                    if (operators[i] === '+') {
+                        result += values[i + 1];
+                    } else if (operators[i] === '-') {
+                        result -= values[i + 1];
+                    }
+                }
+                return Math.round(result);
+            } catch (error) {
+                console.error("Error evaluating expression:", error);
+                return 0;
+            }
+        }
+        
+        // Show equation modal
+        function showEquationModal(expression, score) {
+            equationDisplay.innerHTML = '';
+            const blocks = expression.split(' ');
+            blocks.forEach((block, index) => {
+                const blockElement = document.createElement('div');
+                blockElement.classList.add('equation-block');
+                if (index % 2 === 0) {
+                    blockElement.classList.add('number-block');
+                } else {
+                    blockElement.classList.add('operator-block');
+                }
+                blockElement.textContent = block;
+                equationDisplay.appendChild(blockElement);
+                if (index === blocks.length - 1) {
+                    const equalsElement = document.createElement('div');
+                    equalsElement.classList.add('mx-2', 'text-2xl');
+                    equalsElement.textContent = '=';
+                    equationDisplay.appendChild(equalsElement);
+                    const resultElement = document.createElement('div');
+                    resultElement.classList.add('text-yellow-300', 'text-2xl', 'font-bold');
+                    resultElement.textContent = score;
+                    equationDisplay.appendChild(resultElement);
+                }
+            });
+            equationScoreElement.textContent = score;
+            equationModal.classList.remove('hidden');
+        }
+        
+        // Clear a completed row and shift blocks above down one cell
+        function clearRow(row) {
+            for (let col = 0; col < COLS; col++) {
+                const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                if (cell) {
+                    cell.style.animation = 'flash 0.3s';
+                }
+            }
+            setTimeout(() => {
+                for (let col = 0; col < COLS; col++) {
+                    grid[row][col] = null;
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    if (cell) {
+                        cell.classList.remove('number-block', 'operator-block', 'bomb-block', 'square-block');
+                        cell.classList.add('empty-cell');
+                        cell.textContent = '';
+                        cell.style.animation = '';
+                    }
+                }
+                for (let r = row - 1; r >= 0; r--) {
+                    for (let c = 0; c < COLS; c++) {
+                        grid[r + 1][c] = grid[r][c];
+                        grid[r][c] = null;
+                    }
+                }
+                updateGridDisplay();
+            }, 300);
+        }
+        
+        // Update the grid display
+        function updateGridDisplay() {
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    if (cell) {
+                        cell.classList.remove('number-block', 'operator-block', 'bomb-block', 'square-block');
+                        cell.classList.add('empty-cell');
+                        cell.textContent = '';
+                    }
+                }
+            }
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    const block = grid[row][col];
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    if (block && cell) {
+                        cell.classList.remove('empty-cell');
+                        if (block.type === 'number') {
+                            cell.classList.add('number-block');
+                        } else if (block.type === 'operator') {
+                            cell.classList.add('operator-block');
+                        } else if (block.type === 'special') {
+                            if (block.value === SPECIAL_BLOCKS.BOMB) {
+                                cell.classList.add('bomb-block');
+                            } else if (block.value === SPECIAL_BLOCKS.SQUARE) {
+                                cell.classList.add('square-block');
+                            }
+                        }
+                        cell.textContent = block.value;
+                    }
+                }
+            }
+            drawPiece();
+        }
+        
+        // Update the score
+        function updateScore(points) {
+            score += points;
+            scoreElement.textContent = score;
+            if (score >= 100 && !shopAvailable) {
+                shopAvailable = true;
+                shopButton.classList.remove('disabled');
+            } else if (score < 100 && shopAvailable) {
+                shopAvailable = false;
+                shopButton.classList.add('disabled');
+            }
+        }
+        
+        // Pause the game
+        function pauseGame() {
+            gamePaused = true;
+            if (gameInterval) clearInterval(gameInterval);
+        }
+        
+        // Resume the game
+        function resumeGame() {
+            if (!gameOver) {
+                gamePaused = false;
+                gameInterval = setInterval(moveDown, gameSpeed);
+            }
+        }
+        
+        // End the game
+        function endGame(reason) {
+            gameOver = true;
+            if (gameInterval) clearInterval(gameInterval);
+            finalScoreElement.textContent = score;
+            gameOverReasonElement.textContent = reason;
+            gameOverModal.classList.remove('hidden');
+        }
+        
+        // Show help modal
+        function showHelpModal() {
+            pauseGame();
+            helpModal.classList.remove('hidden');
+        }
+        
+        // Event listeners
+        document.getElementById('left-btn').addEventListener('click', moveLeft);
+        document.getElementById('right-btn').addEventListener('click', moveRight);
+        document.getElementById('down-btn').addEventListener('click', moveDown);
+        document.getElementById('rotate-btn').addEventListener('click', rotatePiece);
+        document.getElementById('shop-btn').addEventListener('click', showShopModal);
+        document.getElementById('help-btn').addEventListener('click', showHelpModal);
+        document.getElementById('close-help').addEventListener('click', () => {
+            helpModal.classList.add('hidden');
+            resumeGame();
+        });
+        document.getElementById('start-btn').addEventListener('click', initGame);
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            gameOverModal.classList.add('hidden');
+            initGame();
+        });
+        document.getElementById('continue-btn').addEventListener('click', () => {
+            equationModal.classList.add('hidden');
+            updateGridDisplay();
+            resumeGame();
+            setTimeout(() => {
+                checkRows();
+            }, 300);
+        });
+        document.getElementById('close-shop').addEventListener('click', closeShopModal);
+        document.getElementById('buy-push-down').addEventListener('click', () => purchaseSkill('push-down'));
+        document.getElementById('buy-organize').addEventListener('click', () => purchaseSkill('organize'));
+        
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (gameOver || gamePaused) {
+                if (e.key === 'Enter' && !equationModal.classList.contains('hidden')) {
+                    document.getElementById('continue-btn').click();
+                }
+                return;
+            }
+            switch (e.key) {
+                case 'ArrowLeft':
+                    moveLeft();
+                    break;
+                case 'ArrowRight':
+                    moveRight();
+                    break;
+                case 'ArrowDown':
+                    moveDown();
+                    break;
+                case 'ArrowUp':
+                    rotatePiece();
+                    break;
+            }
+        });
+        
+        // Initialize the game
+        initGame();
+    </script>
+</body>
+</html>
